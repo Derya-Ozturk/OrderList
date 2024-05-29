@@ -1,0 +1,152 @@
+﻿@page "/orderlist"
+@using System.ComponentModel
+@using AntDesign
+@using AntDesign.TableModels
+@using Business.Abstract
+@using Core
+@using Entities
+@using Entities.Dtos
+@using Flurl
+@using Flurl.Http
+@using Microsoft.Extensions.Configuration
+
+@inject IOrderService _orderService
+@inject NotificationService _notice
+@inject IConfiguration _config
+
+<Breadcrumb>
+    <BreadcrumbItem>Sales</BreadcrumbItem>
+    <BreadcrumbItem>Order</BreadcrumbItem>
+</Breadcrumb>
+
+<div style="height: 50px;"></div>
+<div><Icon Type="double-left" Theme="outline" />  Order List</div>
+<div style="height: 70px;"></div>
+
+<GridRow>
+    <GridCol Span="6"></GridCol>
+    <GridCol Span="8"></GridCol>
+    <GridCol Span="10">
+
+        <Pagination ShowSizeChanger
+                    OnShowSizeChange="OnShowSizeChange"
+                    Current=@pageNumber
+                    PageSize=@pageSize
+                    Total=paginationList.TotalRecords
+                    ShowTotal="@showTotal"
+                    OnChange="OnChange" />
+    </GridCol>
+</GridRow>
+
+<div style="height: 50px;"></div>
+
+<GridRow Justify="center">
+    <AntDesign.GridCol Span="4"><h6>Order No</h6></AntDesign.GridCol>
+    <AntDesign.GridCol Span="4"><h6>Sales Representive</h6></AntDesign.GridCol>
+    <AntDesign.GridCol Span="7"><h6>Customer</h6></AntDesign.GridCol>
+    <AntDesign.GridCol Span="1"></AntDesign.GridCol>
+    <AntDesign.GridCol Span="5"><h6>Date Informations</h6></AntDesign.GridCol>
+    <AntDesign.GridCol Span="2"><h6>Creator</h6></AntDesign.GridCol>
+</GridRow>
+
+<AntList DataSource="@paginationList?.Data">
+    <ChildContent Context="item">
+        <AntDesign.GridRow Justify="center">
+            <AntDesign.GridCol Span="4">
+                <AntDesign.GridRow>
+                    @Guid.NewGuid().ToString().Substring(0,8)
+                    @* @item.CustomerNo *@
+                </AntDesign.GridRow>
+                <AntDesign.GridRow>
+                    <Tag Color="orange-inverse">Order pending confirmation</Tag>
+                </AntDesign.GridRow>
+                <AntDesign.GridRow>
+                    <Tag Color="red-inverse">Waiting Planning Confirmation</Tag>
+                </AntDesign.GridRow>
+            </AntDesign.GridCol>
+            <AntDesign.GridCol Span="4">
+                <GridRow><Image Width="150px" Height="100px" PreviewVisible="false" Src="@item.SalesRepresentive.PersonImage" /></GridRow>
+                <GridRow><Tag Color="#606060">@item.SalesRepresentive.SalesRepresentiveAbbr</Tag> @item.SalesRepresentive.SalesRepresentiveName</GridRow>
+                
+            </AntDesign.GridCol>
+            <AntDesign.GridCol Span="7">
+                <GridRow>
+                    <Tag Color="blue-inverse">@item.CustomerNo</Tag> @item.Customer?.CustomerName
+                </GridRow>
+                <GridRow ></GridRow>
+                <GridRow><Icon Type="home" Theme="twotone" Height="1.3em" Width="1.2em" />@item.Customer?.BillingAddress </GridRow>
+                <GridRow><Icon Type="car" Theme="twotone" Height="1.3em" Width="1.3em" />@item.Customer?.ShippingAddress</GridRow>
+            </AntDesign.GridCol>
+             <GridCol Span="1"></GridCol>
+            <AntDesign.GridCol Span="5">
+                <GridRow>Create Date:    @item.CreateDate</GridRow>
+                <GridRow>Customer Request Date:    @item.CustomerRequestDate</GridRow>
+                <GridRow>Revised Due Date:    @item.RevisedDueDate</GridRow>
+            </AntDesign.GridCol>
+            <AntDesign.GridCol Span="2"  >
+                <GridRow Justify="center"><Image Width="140px" Height="90px" Src="@item.Creator.PersonImage"></Image></GridRow>
+                <GridRow Justify="center">@item.Creator.UserName</GridRow>
+            </AntDesign.GridCol>
+        </AntDesign.GridRow>
+    </ChildContent>
+</AntList>
+
+
+@code {
+
+    Func<PaginationTotalContext, string> showTotal = ctx => $"{ctx.Range.Item1}-{ctx.Range.Item2} of {ctx.Total} items";
+
+    int pageNumber = 1;
+    int pageSize = 10;
+
+    List<OrderDto> orderList = new();
+    OrderDto orderDto = new();
+
+    PaginationList<OrderDto> paginationList;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetOrderList(pageNumber, pageSize);
+    }
+
+    private async Task GetOrderList(int pageNumber, int pageSize)
+    {
+        string? urlString = _config.GetSection("Url")["DevUrl"];
+
+        try
+        {
+            paginationList = new(orderList, pageNumber, pageSize, 0);
+
+            orderDto.PageNumber = pageNumber;
+            orderDto.PageSize = pageSize;
+
+            paginationList = await urlString.PostJsonAsync(orderDto).ReceiveJson<PaginationList<OrderDto>>();
+        }
+
+        catch (Exception ex)
+        {
+            await _notice.Open(new NotificationConfig()
+                {
+                    NotificationType = NotificationType.Error,
+                    Message = "Error",
+                    Description = ex.Message
+                });
+        }
+
+    }
+
+    private void OnShowSizeChange(PaginationEventArgs args)
+    {
+        pageSize = args.PageSize;
+
+        StateHasChanged();
+    }
+
+    async Task OnChange(PaginationEventArgs args)
+    {
+        pageNumber = args.Page;
+        await GetOrderList(pageNumber, args.PageSize);
+
+        StateHasChanged();
+    }
+}
